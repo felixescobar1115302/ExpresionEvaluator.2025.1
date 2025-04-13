@@ -1,4 +1,6 @@
-﻿namespace Evaluator.Logic;
+﻿using System.Globalization;
+
+namespace Evaluator.Logic;
 
 public class FunctionEvaluator
 {
@@ -8,22 +10,39 @@ public class FunctionEvaluator
         return Calculate(postfix);
     }
 
+
     private static double Calculate(string postfix)
     {
         var stack = new Stack<double>();
-        foreach (var item in postfix)
+        var tokens = postfix.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+
+        foreach (var token in tokens)
         {
-            if (IsOperator(item))
+            if (token.Length == 1 && IsOperator(token[0]))
             {
-                var operator2 = stack.Pop();
-                var operator1 = stack.Pop();
-                stack.Push(Result(operator1, item, operator2));
+                if (stack.Count < 2)
+                    throw new InvalidOperationException("The stack is empty. There are not enough operands.");
+                double operator2 = stack.Pop();
+                double operator1 = stack.Pop();
+                stack.Push(Result(operator1, token[0], operator2));
             }
             else
             {
-                stack.Push(char.GetNumericValue(item));
+                try
+                {
+                    double value = double.Parse(token, CultureInfo.InvariantCulture);
+                    stack.Push(value);
+                }
+                catch (FormatException ex)
+                {
+                    throw new FormatException($"The number '{token}' it is not in a correct format.", ex);
+                }
             }
         }
+
+        if (stack.Count != 1)
+            throw new InvalidOperationException("The stack has more than one element. Invalid expression.");
+
         return stack.Pop();
     }
 
@@ -36,7 +55,7 @@ public class FunctionEvaluator
             '*' => operator1 * operator2,
             '/' => operator1 / operator2,
             '^' => Math.Pow(operator1, operator2),
-            _ => throw new Exception("Invalid expresion"),
+            _ => throw new Exception("Invalid expression."),
         };
     }
 
@@ -44,48 +63,56 @@ public class FunctionEvaluator
     {
         var stack = new Stack<char>();
         var postfix = string.Empty;
+        string number = ""; 
+
         foreach (var item in infix)
         {
             if (IsOperator(item))
             {
-                if (stack.Count == 0)
+                if (!string.IsNullOrEmpty(number))
                 {
-                    stack.Push(item);
+                    postfix += number + " ";
+                    number = "";
+                }
+
+                if (item == ')')
+                {
+                    while (stack.Count > 0 && stack.Peek() != '(')
+                    {
+                        postfix += stack.Pop() + " ";
+                    }
+                    stack.Pop(); 
                 }
                 else
                 {
-                    if (item == ')')
+                    while (stack.Count > 0 && PriorityExpression(item) <= PriorityStack(stack.Peek()))
                     {
-                        do
-                        {
-                            postfix += stack.Pop();
-                        } while (stack.Peek() != '(');
-                        stack.Pop();
+                        postfix += stack.Pop() + " ";
                     }
-                    else
-                    {
-                        if (PriorityExpression(item) > PriorityStack(stack.Peek()))
-                        {
-                            stack.Push(item);
-                        }
-                        else
-                        {
-                            postfix += stack.Pop();
-                            stack.Push(item);
-                        }
-                    }
+                    stack.Push(item);
                 }
+            }
+            else if (item == '(')
+            {
+                stack.Push(item);
             }
             else
             {
-                postfix += item;
+                number += item;
             }
         }
-        do
+
+        if (!string.IsNullOrEmpty(number))
         {
-            postfix += stack.Pop();
-        } while (stack.Count > 0);
-        return postfix;
+            postfix += number + " ";
+        }
+
+        while (stack.Count > 0)
+        {
+            postfix += stack.Pop() + " ";
+        }
+
+        return postfix.Trim();
     }
 
     private static int PriorityStack(char item)
@@ -98,7 +125,7 @@ public class FunctionEvaluator
             '+' => 1,
             '-' => 1,
             '(' => 0,
-            _ => throw new Exception("Invalid expression."),
+            _ => throw new Exception("Invalid expression.")
         };
     }
 
@@ -112,7 +139,7 @@ public class FunctionEvaluator
             '+' => 1,
             '-' => 1,
             '(' => 5,
-            _ => throw new Exception("Invalid expression."),
+            _ => throw new Exception("Invalid expression.")
         };
     }
 
